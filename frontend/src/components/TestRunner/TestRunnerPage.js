@@ -24,6 +24,7 @@ const LS_TOKEN_KEY = 'grafanaprobe_token';
 /* ───────────────────────── component ───────────────────────── */
 export default function TestRunnerPage() {
   /* ── state ── */
+  const [engine, setEngine] = useState('k6'); // 'k6' | 'playwright'
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [grafanaUrl, setGrafanaUrl] = useState('');
@@ -561,11 +562,111 @@ export default function TestRunnerPage() {
   };
 
   /* ───────────────────────── render ───────────────────────── */
+  /* ── engine tab styles ── */
+  const engineTabStyle = (active) => ({
+    padding: '10px 24px',
+    fontSize: 14,
+    fontWeight: 600,
+    color: active ? '#fff' : '#94a3b8',
+    background: active ? 'linear-gradient(135deg, #6366f1, #818cf8)' : '#111827',
+    border: `1.5px solid ${active ? '#6366f1' : '#1e293b'}`,
+    borderRadius: 10,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    boxShadow: active ? '0 0 16px rgba(99,102,241,0.3)' : 'none',
+  });
+
+  const PLAYWRIGHT_SUITES = [
+    { id: 'smoke', icon: '🔥', name: 'Smoke Tests', desc: 'Login, nav, health' },
+    { id: 'dashboards', icon: '📊', name: 'Dashboard E2E', desc: 'Load, variables, time picker' },
+    { id: 'panels', icon: '📱', name: 'Panel Rendering', desc: 'All panel types' },
+    { id: 'alerting', icon: '🔔', name: 'Alerting E2E', desc: 'Rules, pipeline, contacts' },
+    { id: 'plugins', icon: '🧩', name: 'Plugin Pages', desc: 'Catalog, config, app pages' },
+    { id: 'visual', icon: '📸', name: 'Visual Regression', desc: 'Screenshot diff' },
+    { id: 'performance', icon: '⚡', name: 'Performance', desc: 'Web Vitals, load time' },
+    { id: 'a11y', icon: '♿', name: 'Accessibility', desc: 'WCAG audit' },
+    { id: 'security', icon: '🔒', name: 'Security', desc: 'Auth, XSS, CSRF' },
+    { id: 'k8s', icon: '☸️', name: 'Kubernetes E2E', desc: 'K8s dashboards, vars' },
+    { id: 'upgrade', icon: '🔄', name: 'Upgrade Validation', desc: 'Pre/post diff' },
+    { id: 'multi-org', icon: '🏢', name: 'Multi-Org E2E', desc: 'Org switch, isolation' },
+  ];
+
   return (
     <div style={st.page}>
       <h1 style={st.pageTitle}>Test Runner</h1>
-      <p style={st.pageSubtitle}>Select categories, configure your Grafana instance, and run tests.</p>
+      <p style={st.pageSubtitle}>Select test engine, categories, and run tests.</p>
 
+      {/* ── Engine Selector (K6 vs Playwright) ── */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 28 }}>
+        <button style={engineTabStyle(engine === 'k6')} onClick={() => setEngine('k6')}>
+          <span style={{ fontSize: 18 }}>⚡</span> K6 API Tests
+          <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>({categories.length} categories)</span>
+        </button>
+        <button style={engineTabStyle(engine === 'playwright')} onClick={() => setEngine('playwright')}>
+          <span style={{ fontSize: 18 }}>🎭</span> Playwright E2E
+          <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>({PLAYWRIGHT_SUITES.length} suites)</span>
+        </button>
+      </div>
+
+      {/* ── Playwright Mode ── */}
+      {engine === 'playwright' && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={st.sectionLabel}>Playwright E2E Suites</div>
+          <div style={{ ...st.catGrid, gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            {PLAYWRIGHT_SUITES.map((suite, idx) => (
+              <div key={suite.id} style={{
+                padding: '16px 18px',
+                backgroundColor: '#111827',
+                border: '1.5px solid #1e293b',
+                borderRadius: 12,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e293b'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 22 }}>{suite.icon}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{suite.name}</span>
+                </div>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>{suite.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{
+            padding: '20px',
+            backgroundColor: '#111827',
+            border: '1px solid #1e293b',
+            borderRadius: 12,
+            marginTop: 16,
+            textAlign: 'center',
+          }}>
+            <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 12 }}>
+              Playwright E2E tests require Playwright installed: <code style={{ color: '#818cf8', backgroundColor: '#0f172a', padding: '2px 6px', borderRadius: 4 }}>npx playwright install chromium</code>
+            </p>
+            <button style={{
+              padding: '10px 24px',
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#fff',
+              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+              border: 'none',
+              borderRadius: 10,
+              cursor: 'pointer',
+              boxShadow: '0 0 16px rgba(99,102,241,0.3)',
+              opacity: 0.5,
+            }} disabled>
+              🎭 Coming Soon — Playwright Integration
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── K6 Mode ── */}
+      {engine === 'k6' && (<>
       {/* ── Category Selector ── */}
       <div style={st.sectionLabel}>Select Categories</div>
       <div style={st.catGrid}>
@@ -771,6 +872,7 @@ export default function TestRunnerPage() {
           )}
         </>
       )}
+      </>)}
     </div>
   );
 }

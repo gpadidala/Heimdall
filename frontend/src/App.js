@@ -16,6 +16,7 @@ const layoutStyle = {
 
 const mainStyle = {
   flex: 1,
+  marginLeft: 260,
   padding: '24px 32px',
   overflowY: 'auto',
   maxHeight: '100vh',
