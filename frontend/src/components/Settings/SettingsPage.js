@@ -121,28 +121,24 @@ const LLM_MODELS = {
 
 /* ═══════════════════════════════════════ */
 export default function SettingsPage() {
-  /* ── Grafana Connection ── */
-  const [grafanaUrl, setGrafanaUrl] = useState('');
-  const [grafanaToken, setGrafanaToken] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+  /* ── Per-environment test state ── */
+  const [envTesting, setEnvTesting] = useState({});      // { DEV: true, PERF: false, ... }
+  const [envTestResults, setEnvTestResults] = useState({}); // { DEV: {ok, version, ...}, ... }
 
-  useEffect(() => {
-    api.config().then((cfg) => {
-      if (cfg?.grafanaUrl) setGrafanaUrl(cfg.grafanaUrl);
-    }).catch(() => {});
-  }, []);
-
-  const handleTestConnection = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await api.testConnection(grafanaUrl, grafanaToken);
-      setTestResult(res);
-    } catch (e) {
-      setTestResult({ ok: false, error: e.message });
+  const handleTestEnv = async (env) => {
+    if (!env.url) {
+      setEnvTestResults(p => ({ ...p, [env.key]: { ok: false, error: 'URL is required' } }));
+      return;
     }
-    setTesting(false);
+    setEnvTesting(p => ({ ...p, [env.key]: true }));
+    setEnvTestResults(p => ({ ...p, [env.key]: null }));
+    try {
+      const res = await api.testConnection(env.url, env.token);
+      setEnvTestResults(p => ({ ...p, [env.key]: res }));
+    } catch (e) {
+      setEnvTestResults(p => ({ ...p, [env.key]: { ok: false, error: e.message } }));
+    }
+    setEnvTesting(p => ({ ...p, [env.key]: false }));
   };
 
   /* ── Environments ── */
@@ -175,47 +171,7 @@ export default function SettingsPage() {
     <div style={s.page}>
       <h1 style={s.title}>{'\u2699\uFE0F'} Settings</h1>
 
-      {/* ── Section 1: Grafana Connection ── */}
-      <div style={s.section}>
-        <h2 style={s.sectionTitle}>{'\uD83D\uDD17'} Grafana Connection</h2>
-
-        <div style={s.row}>
-          <div style={s.col}>
-            <label style={s.label}>Grafana URL</label>
-            <StyledInput type="text" placeholder="https://grafana.example.com"
-              value={grafanaUrl} onChange={(e) => setGrafanaUrl(e.target.value)} />
-          </div>
-          <div style={s.col}>
-            <label style={s.label}>API Token</label>
-            <StyledInput type="password" placeholder="glsa_..."
-              value={grafanaToken} onChange={(e) => setGrafanaToken(e.target.value)} />
-          </div>
-        </div>
-
-        <button style={{ ...s.btn, opacity: testing ? 0.6 : 1 }}
-          disabled={testing} onClick={handleTestConnection}>
-          {testing ? 'Testing...' : 'Test Connection'}
-        </button>
-
-        {testResult && (
-          <div style={s.resultBox}>
-            {testResult.ok ? (
-              <div>
-                <span style={{ color: C.green, fontWeight: 700 }}>{'\u2714'} Connected</span>
-                <div style={{ marginTop: 8, color: C.muted }}>
-                  Version: <span style={{ color: C.text }}>{testResult.version}</span>
-                  {' \u00B7 '}User: <span style={{ color: C.text }}>{testResult.user}</span>
-                  {' \u00B7 '}{testResult.ms}ms
-                </div>
-              </div>
-            ) : (
-              <span style={{ color: C.red }}>{'\u2718'} {testResult.error || 'Connection failed'}</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 2: Environments ── */}
+      {/* ── Section 1: Environments (with built-in test) ── */}
       <div style={s.section}>
         <h2 style={s.sectionTitle}>
           {'\uD83C\uDF10'} Environments
@@ -245,7 +201,30 @@ export default function SettingsPage() {
                     <StyledInput type="password" placeholder="glsa_..."
                       value={env.token} onChange={(e) => updateEnv(env.key, 'token', e.target.value)} />
                   </div>
-                  <button style={s.btn} onClick={() => handleSaveEnv(env.key)}>Save</button>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button style={s.btn} onClick={() => handleSaveEnv(env.key)}>Save</button>
+                    <button style={{ ...s.btnOutline, opacity: envTesting[env.key] ? 0.6 : 1 }}
+                      disabled={envTesting[env.key]}
+                      onClick={() => handleTestEnv(env)}>
+                      {envTesting[env.key] ? 'Testing...' : 'Test Connection'}
+                    </button>
+                  </div>
+                  {envTestResults[env.key] && (
+                    <div style={s.resultBox}>
+                      {envTestResults[env.key].ok ? (
+                        <div>
+                          <span style={{ color: C.green, fontWeight: 700 }}>{'\u2714'} Connected</span>
+                          <div style={{ marginTop: 8, color: C.muted, fontSize: 13 }}>
+                            Version: <span style={{ color: C.text }}>{envTestResults[env.key].version}</span>
+                            {' \u00B7 '}User: <span style={{ color: C.text }}>{envTestResults[env.key].user}</span>
+                            {' \u00B7 '}{envTestResults[env.key].ms}ms
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ color: C.red }}>{'\u2718'} {envTestResults[env.key].error || 'Connection failed'}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
