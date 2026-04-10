@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import Sidebar from './components/Common/Sidebar';
+import OnboardingModal from './components/Onboarding/OnboardingModal';
 import DashboardPage from './components/Dashboard/DashboardPage';
 import TestRunnerPage from './components/TestRunner/TestRunnerPage';
 import ReportsPage from './components/Reports/ReportsPage';
@@ -22,23 +23,39 @@ const mainStyle = {
   maxHeight: '100vh',
 };
 
+function AppShell() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    try {
+      const onboarded = localStorage.getItem('grafanaprobe_onboarded');
+      if (!onboarded) setShowOnboarding(true);
+    } catch {}
+  }, []);
+
+  return (
+    <BrowserRouter>
+      {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
+      <div style={layoutStyle}>
+        <Sidebar />
+        <main style={mainStyle}>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/run" element={<TestRunnerPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </main>
+      </div>
+    </BrowserRouter>
+  );
+}
+
 export default function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
-        <div style={layoutStyle}>
-          <Sidebar />
-          <main style={mainStyle}>
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/run" element={<TestRunnerPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/compare" element={<ComparePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
+      <AppShell />
     </AppProvider>
   );
 }

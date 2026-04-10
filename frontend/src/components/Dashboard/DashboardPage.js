@@ -26,13 +26,22 @@ function pct(n, total) {
   return `${Math.round((n / total) * 100)}%`;
 }
 
-/* ───────────────────────── keyframes (injected once) ───────────────────────── */
+/* ───────────────────────── keyframes + hover CSS (injected once) ───────────────────────── */
 const KEYFRAMES = `
 @keyframes dashSpin { to { transform: rotate(360deg); } }
 @keyframes dashLift {
   0% { transform: translateY(0); box-shadow: 0 0 0 rgba(0,0,0,0); }
   100% { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
 }
+/* CSS hover — replaces JS state to avoid stuck-hover bugs */
+.gp-stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.gp-stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.gp-cat-card { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.gp-cat-card:hover { border-color: #6366f1 !important; box-shadow: 0 4px 16px rgba(99,102,241,0.15); }
+.gp-table-row { transition: background-color 0.15s ease; }
+.gp-table-row:hover { background-color: rgba(99,102,241,0.06); }
+.gp-cat-run-btn { transition: all 0.15s ease; }
+.gp-cat-run-btn:hover { background-color: rgba(99,102,241,0.2); border-color: #6366f1; }
 `;
 let kfInjected = false;
 function injectKF() {
@@ -51,9 +60,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState([]);
   const [categories, setCategories] = useState([]);
   const [running, setRunning] = useState(false);
-  const [hoveredStat, setHoveredStat] = useState(null);
-  const [hoveredCat, setHoveredCat] = useState(null);
-  const [hoveredRow, setHoveredRow] = useState(null);
+  // hover handled via CSS classes — no JS state needed
 
   useEffect(() => { injectKF(); }, []);
 
@@ -331,15 +338,7 @@ export default function DashboardPage() {
       {/* Stats Row */}
       <div style={s.statsGrid}>
         {statsData.map((stat, idx) => (
-          <div
-            key={idx}
-            style={{
-              ...s.statCard,
-              ...(hoveredStat === idx ? s.statCardHover : {}),
-            }}
-            onMouseEnter={() => setHoveredStat(idx)}
-            onMouseLeave={() => setHoveredStat(null)}
-          >
+          <div key={idx} className="gp-stat-card" style={s.statCard}>
             <span style={s.statIcon}>{stat.icon}</span>
             <div style={{ ...s.statValue, color: stat.color }}>{stat.value}</div>
             <div style={s.statLabel}>{stat.label}</div>
@@ -355,22 +354,11 @@ export default function DashboardPage() {
             ? (latestSummary.categories[cat.id] || {}).status
             : undefined;
           return (
-            <div
-              key={cat.id}
-              style={{
-                ...s.catCard,
-                ...(hoveredCat === idx ? s.catCardHover : {}),
-              }}
-              onMouseEnter={() => setHoveredCat(idx)}
-              onMouseLeave={() => setHoveredCat(null)}
-            >
+            <div key={cat.id} className="gp-cat-card" style={s.catCard}>
               <span style={s.catIcon}>{cat.icon || '📦'}</span>
               <span style={s.catName}>{cat.name}</span>
               {status && <StatusBadge status={status} size="sm" />}
-              <button
-                style={s.catRunBtn}
-                onClick={() => navigate('/run')}
-              >
+              <button className="gp-cat-run-btn" style={s.catRunBtn} onClick={() => navigate('/run')}>
                 ▶ Run
               </button>
             </div>
@@ -405,16 +393,7 @@ export default function DashboardPage() {
                 const status = run.status || (sum.failed > 0 ? 'failed' : 'passed');
 
                 return (
-                  <tr
-                    key={run.id || idx}
-                    style={{
-                      ...s.tableRow,
-                      ...(hoveredRow === idx ? s.tableRowHover : {}),
-                    }}
-                    onMouseEnter={() => setHoveredRow(idx)}
-                    onMouseLeave={() => setHoveredRow(null)}
-                    onClick={() => navigate('/reports')}
-                  >
+                  <tr key={run.id || idx} className="gp-table-row" style={s.tableRow} onClick={() => navigate('/reports')}>
                     <td style={s.td}>
                       <StatusBadge status={status} size="sm" />
                     </td>

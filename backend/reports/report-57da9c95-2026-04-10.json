@@ -1,0 +1,40 @@
+{
+  "id": "57da9c95-6fe5-4708-94c9-eabb27315244",
+  "grafanaUrl": "http://localhost:3200",
+  "startedAt": "2026-04-10T05:40:54.210Z",
+  "completedAt": "2026-04-10T05:40:54.655Z",
+  "status": "failed",
+  "categories": [
+    {
+      "id": "dashboards",
+      "name": "Dashboards",
+      "icon": "📊",
+      "status": "FAIL",
+      "tests": [
+        {
+          "name": "Dashboard search",
+          "status": "FAIL",
+          "detail": "Cannot list dashboards: ",
+          "uid": null,
+          "ms": 1,
+          "metadata": {}
+        }
+      ],
+      "summary": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "warnings": 0
+      },
+      "duration_ms": 5
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "warnings": 0,
+    "pass_rate": "0.0%"
+  },
+  "grafanaVersion": "unknown"
+}
