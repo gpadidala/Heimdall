@@ -3,7 +3,6 @@
   "version": "2.0.0",
   "description": "GrafanaProbe — Enterprise-grade Grafana testing platform by Gopal Rao",
   "private": true,
-  "workspaces": ["backend", "frontend"],
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
