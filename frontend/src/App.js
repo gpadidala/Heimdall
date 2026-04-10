@@ -9,6 +9,7 @@ import ReportsPage from './components/Reports/ReportsPage';
 import ComparePage from './components/Compare/ComparePage';
 import SnapshotsPage from './components/Snapshots/SnapshotsPage';
 import SettingsPage from './components/Settings/SettingsPage';
+import AITestsPage from './components/AITests/AITestsPage';
 
 const layoutStyle = {
   display: 'flex',
@@ -42,6 +43,7 @@ function AppShell() {
         <main style={mainStyle}>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/ai-tests" element={<AITestsPage />} />
             <Route path="/run" element={<TestRunnerPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/compare" element={<ComparePage />} />
