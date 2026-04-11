@@ -29,6 +29,7 @@ function fmtDate(iso) {
 module.exports = async function (page, grafanaUrl, token, options) {
   const results = [];
   const scopedDs = options && options.scopedDs;
+  const pluginFilter = options && options.pluginFilter;
   const runId = options && options.runId;
 
   // Fetch dashboard list
@@ -76,6 +77,37 @@ module.exports = async function (page, grafanaUrl, token, options) {
       name: 'Datasource scope',
       status: toTest.length > 0 ? 'PASS' : 'WARN',
       detail: `Scoped to ${toTest.length} dashboard(s) using "${scopedDs.name || scopedDs.uid}"`,
+      ms: 0,
+    });
+  } else if (pluginFilter && pluginFilter.id) {
+    // Plugin scope: only test dashboards that have at least one panel
+    // whose `type` matches the plugin id, OR whose datasource.type matches.
+    // Walks each dashboard JSON via the API.
+    const filtered = [];
+    for (const db of dashboards) {
+      try {
+        const r = await page.request.get(`${grafanaUrl}/api/dashboards/uid/${db.uid}`);
+        if (!r.ok()) continue;
+        const body = await r.json();
+        const model = body.dashboard || {};
+        const panels = (model.panels || []).flatMap((p) =>
+          p.type === 'row' && Array.isArray(p.panels) ? p.panels : [p]);
+        const usesPlugin = panels.some((p) => {
+          if (p.type === pluginFilter.id) return true;
+          if (p.datasource && typeof p.datasource === 'object' && p.datasource.type === pluginFilter.id) return true;
+          if (Array.isArray(p.targets)) {
+            return p.targets.some((t) => t.datasource && typeof t.datasource === 'object' && t.datasource.type === pluginFilter.id);
+          }
+          return false;
+        });
+        if (usesPlugin) filtered.push(db);
+      } catch { /* skip */ }
+    }
+    toTest = filtered;
+    results.push({
+      name: 'Plugin scope',
+      status: toTest.length > 0 ? 'PASS' : 'WARN',
+      detail: `Scoped to ${toTest.length} dashboard(s) using plugin "${pluginFilter.id}"`,
       ms: 0,
     });
   } else {
@@ -185,12 +217,20 @@ module.exports = async function (page, grafanaUrl, token, options) {
     //   <div data-viz-panel-key="panel-7">
     //     <section data-testid="data-testid Panel header My Title">...</section>
     //   </div>
-    // Older Grafana 9/10 fallback uses [data-panelid] on the section.
-    const panelContainers = page.locator('[data-viz-panel-key], section[data-testid^="data-testid Panel header"], [data-panelid]');
+    // Older Grafana 9/10 fallback uses [data-panelid] on the section. Use
+    // a tiered fallback so we count each panel exactly once instead of
+    // matching both the outer div and the inner section on the same panel.
+    let panelContainers = page.locator('[data-viz-panel-key]');
     let panelCount = 0;
-    try {
-      panelCount = await panelContainers.count();
-    } catch {}
+    try { panelCount = await panelContainers.count(); } catch {}
+    if (panelCount === 0) {
+      panelContainers = page.locator('section[data-testid^="data-testid Panel header"]');
+      try { panelCount = await panelContainers.count(); } catch {}
+    }
+    if (panelCount === 0) {
+      panelContainers = page.locator('[data-panelid]');
+      try { panelCount = await panelContainers.count(); } catch {}
+    }
 
     let errorPanels = 0;
     let noDataPanels = 0;

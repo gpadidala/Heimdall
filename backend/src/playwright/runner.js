@@ -128,6 +128,7 @@ class PlaywrightRunner {
               suiteId,
               runId,
               datasourceFilter: options.datasourceFilter || null,
+              pluginFilter: options.pluginFilter || null,
               scopedDs,
             });
 

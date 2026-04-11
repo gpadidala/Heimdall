@@ -83,6 +83,96 @@ app.post('/api/test-connection', async (req, res) => {
 // ─── Categories ───
 app.get('/api/tests/categories', (req, res) => { res.json(engine.getCategories()); });
 
+// ─── Plugins (for the Plugin Validation page) ───
+const pluginCheck = require('./services/pluginCheck');
+
+app.get('/api/plugins/installed', async (req, res) => {
+  try {
+    const { grafanaUrl, token } = req.query;
+    const url = (grafanaUrl && String(grafanaUrl).trim()) || config.grafana.url;
+    const tok = (token && String(token).trim()) || config.grafana.token;
+    const client = new GrafanaClient(url, tok);
+    const list = await pluginCheck.listInstalledPlugins(client);
+    res.json(list);
+  } catch (err) {
+    logger.error('plugins/installed failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plugins/:id/update-info', async (req, res) => {
+  try {
+    const { grafanaUrl, token } = req.query;
+    const url = (grafanaUrl && String(grafanaUrl).trim()) || config.grafana.url;
+    const tok = (token && String(token).trim()) || config.grafana.token;
+    const client = new GrafanaClient(url, tok);
+    const list = await pluginCheck.listInstalledPlugins(client);
+    const installed = list.find((p) => p.id === req.params.id);
+    if (!installed) return res.status(404).json({ error: 'Plugin not installed' });
+    const info = await pluginCheck.getUpdateInfo(installed);
+    res.json({ installed, ...info });
+  } catch (err) {
+    logger.error('plugins/update-info failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plugins/:id/impact', async (req, res) => {
+  try {
+    const { grafanaUrl, token } = req.query;
+    const url = (grafanaUrl && String(grafanaUrl).trim()) || config.grafana.url;
+    const tok = (token && String(token).trim()) || config.grafana.token;
+    const client = new GrafanaClient(url, tok);
+    const impact = await pluginCheck.getPluginImpact(client, req.params.id);
+    res.json(impact);
+  } catch (err) {
+    logger.error('plugins/impact failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Run Playwright validation against every dashboard that uses this plugin.
+// Reuses the existing dashboard-load spec via the new pluginFilter option,
+// streams progress over WebSocket, and returns the final results object.
+app.post('/api/plugins/:id/validate', async (req, res) => {
+  try {
+    const { grafanaUrl, token } = req.body || {};
+    const url = (grafanaUrl && grafanaUrl.trim()) || config.grafana.url;
+    const tok = (token && token.trim()) || config.grafana.token;
+    const pw = new PlaywrightRunner(url, tok);
+    try {
+      const ret = await pw.runSuites(
+        ['dashboards'],
+        (evt) => io.emit('pw-progress', evt),
+        { pluginFilter: { id: req.params.id } },
+      );
+      const suiteList = ret.results || [];
+      const allTests = suiteList.flatMap((s) => s.tests || []);
+      const summary = {
+        total: allTests.length,
+        passed: allTests.filter((t) => t.status === 'PASS').length,
+        failed: allTests.filter((t) => t.status === 'FAIL').length,
+        warnings: allTests.filter((t) => t.status === 'WARN').length,
+      };
+      summary.pass_rate = summary.total > 0
+        ? `${((summary.passed / summary.total) * 100).toFixed(1)}%`
+        : '0%';
+      res.json({
+        status: summary.failed > 0 ? 'failed' : 'passed',
+        summary,
+        suites: suiteList,
+        runId: ret.runId,
+        reportFile: ret.reportFile,
+      });
+    } finally {
+      await pw.close();
+    }
+  } catch (err) {
+    logger.error('plugins/validate failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Datasources (for the "Scope by Datasource" filter in Run Tests) ───
 app.get('/api/datasources', async (req, res) => {
   try {
@@ -180,12 +270,12 @@ app.get('/api/datasources/:uid/impact', async (req, res) => {
 
 // ─── Run Tests ───
 app.post('/api/tests/run', async (req, res) => {
-  const { grafanaUrl, token, categories, strategy, mode, envKey, datasourceFilter } = req.body;
+  const { grafanaUrl, token, categories, strategy, mode, envKey, datasourceFilter, pluginFilter } = req.body;
   const url = (grafanaUrl && grafanaUrl.trim()) || config.grafana.url;
   const tok = (token && token.trim()) || config.grafana.token;
   const cats = categories || engine.getCategories().map(c => c.id);
 
-  const report = await engine.runCategories(cats, url, tok, (evt) => io.emit('test-progress', evt), { strategy, mode, envId: envKey || null, datasourceFilter });
+  const report = await engine.runCategories(cats, url, tok, (evt) => io.emit('test-progress', evt), { strategy, mode, envId: envKey || null, datasourceFilter, pluginFilter });
 
   // Retention: keep only the N most-recent runs for this env
   try {
@@ -596,7 +686,7 @@ app.get('/api/playwright/suites', (req, res) => {
 });
 
 app.post('/api/playwright/run', async (req, res) => {
-  const { grafanaUrl, token, suites, datasourceFilter } = req.body;
+  const { grafanaUrl, token, suites, datasourceFilter, pluginFilter } = req.body;
   const url = (grafanaUrl && grafanaUrl.trim()) || config.grafana.url;
   const tok = (token && token.trim()) || config.grafana.token;
   const pw = new PlaywrightRunner(url, tok);
@@ -605,7 +695,7 @@ app.post('/api/playwright/run', async (req, res) => {
     const ret = await pw.runSuites(
       suites || pw.getSuites().map(s => s.id),
       (evt) => io.emit('pw-progress', evt),
-      { datasourceFilter },
+      { datasourceFilter, pluginFilter },
     );
 
     const suiteList = ret.results || [];
@@ -830,12 +920,12 @@ io.on('connection', (socket) => {
   logger.info(`Client connected: ${socket.id}`);
 
   socket.on('run-tests', async (data) => {
-    const { grafanaUrl, token, categories, envKey, datasourceFilter } = data || {};
+    const { grafanaUrl, token, categories, envKey, datasourceFilter, pluginFilter } = data || {};
     const url = (grafanaUrl && grafanaUrl.trim()) || config.grafana.url;
     const tok = (token && token.trim()) || config.grafana.token;
     const cats = categories || engine.getCategories().map(c => c.id);
 
-    const report = await engine.runCategories(cats, url, tok, (evt) => socket.emit('test-progress', evt), { envId: envKey || null, datasourceFilter });
+    const report = await engine.runCategories(cats, url, tok, (evt) => socket.emit('test-progress', evt), { envId: envKey || null, datasourceFilter, pluginFilter });
 
     try {
       const pruned = await ops.pruneOldRuns(envKey || null, config.retention.maxRunsPerEnv);
@@ -848,14 +938,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('run-jmeter', async (data) => {
-    const { grafanaUrl, token, plans, threads, duration, datasourceFilter } = data || {};
+    const { grafanaUrl, token, plans, threads, duration, datasourceFilter, pluginFilter } = data || {};
     const url = (grafanaUrl && grafanaUrl.trim()) || config.grafana.url;
     const tok = (token && token.trim()) || config.grafana.token;
     const jm = new JMeterRunner(url, tok);
     try {
       const result = await jm.runPlans(
         plans || jm.getPlans().map(p => p.id),
-        { threads: threads || 20, duration: duration || 30, datasourceFilter },
+        { threads: threads || 20, duration: duration || 30, datasourceFilter, pluginFilter },
         (evt) => socket.emit('jm-progress', evt),
       );
       socket.emit('jm-complete', result);
@@ -865,7 +955,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('run-playwright', async (data) => {
-    const { grafanaUrl, token, suites, datasourceFilter } = data || {};
+    const { grafanaUrl, token, suites, datasourceFilter, pluginFilter } = data || {};
     const url = (grafanaUrl && grafanaUrl.trim()) || config.grafana.url;
     const tok = (token && token.trim()) || config.grafana.token;
     const pw = new PlaywrightRunner(url, tok);
@@ -873,7 +963,7 @@ io.on('connection', (socket) => {
       const ret = await pw.runSuites(
         suites || pw.getSuites().map(s => s.id),
         (evt) => socket.emit('pw-progress', evt),
-        { datasourceFilter },
+        { datasourceFilter, pluginFilter },
       );
       // runSuites now returns { runId, reportFile, results, report }
       const suiteList = ret.results || [];

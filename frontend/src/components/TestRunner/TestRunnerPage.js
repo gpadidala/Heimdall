@@ -79,6 +79,21 @@ export default function TestRunnerPage() {
   const [dsImpact, setDsImpact] = useState(null);
   const [dsLoading, setDsLoading] = useState(false);
 
+  /* ── Plugin scope (optional) — pulls installed plugins from Grafana,
+     lets the user pick one, and shows:
+       · current vs latest version + update type (major/minor/patch)
+       · decommission banner for known EOL plugins
+       · breaking-change warnings for risky upgrades
+       · blast radius (dashboards / panels / alerts using the plugin)
+     When set, Playwright's dashboard-load spec scopes its panel
+     validation to only dashboards that use this plugin — catching
+     pink-error / no-data / broken panels that the upgrade may break. ── */
+  const [plugins, setPlugins] = useState([]);
+  const [pluginId, setPluginId] = useState('');
+  const [pluginUpdate, setPluginUpdate] = useState(null);
+  const [pluginImpact, setPluginImpact] = useState(null);
+  const [pluginLoading, setPluginLoading] = useState(false);
+
   useEffect(() => { injectKF(); }, []);
 
   // Load datasources when env changes
@@ -110,6 +125,41 @@ export default function TestRunnerPage() {
     const ds = datasources.find((d) => d.uid === datasourceUid);
     return ds ? { uid: ds.uid, name: ds.name } : null;
   })();
+
+  /* ── plugin scope: load installed plugins when env changes ── */
+  useEffect(() => {
+    if (!envConfigured) { setPlugins([]); return; }
+    setPluginLoading(true);
+    api.listInstalledPlugins(grafanaUrl, token)
+      .then((list) => { setPlugins(Array.isArray(list) ? list : []); })
+      .catch(() => setPlugins([]))
+      .finally(() => setPluginLoading(false));
+    setPluginId('');
+    setPluginUpdate(null);
+    setPluginImpact(null);
+  }, [grafanaUrl, token, envConfigured]);
+
+  /* ── plugin scope: fetch update-info + impact when plugin picked ── */
+  useEffect(() => {
+    if (!pluginId || !envConfigured) {
+      setPluginUpdate(null);
+      setPluginImpact(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      api.getPluginUpdateInfo(pluginId, grafanaUrl, token).catch(() => null),
+      api.getPluginImpact(pluginId, grafanaUrl, token).catch(() => null),
+    ]).then(([upd, imp]) => {
+      if (cancelled) return;
+      setPluginUpdate(upd);
+      setPluginImpact(imp);
+    });
+    return () => { cancelled = true; };
+  }, [pluginId, grafanaUrl, token, envConfigured]);
+
+  // Helper to build the pluginFilter payload for the backend
+  const pluginFilter = pluginId ? { id: pluginId } : null;
 
   /* load categories */
   useEffect(() => {
@@ -249,8 +299,9 @@ export default function TestRunnerPage() {
       envKey: activeEnv?.key || null,
       categories: Array.from(selected),
       datasourceFilter,
+      pluginFilter,
     });
-  }, [selected, grafanaUrl, token, activeEnv, envConfigured, addLog, phase, datasourceFilter]);
+  }, [selected, grafanaUrl, token, activeEnv, envConfigured, addLog, phase, datasourceFilter, pluginFilter]);
 
   /* ── toggle expanded result ── */
   const toggleExpanded = (catId) => {
@@ -742,7 +793,7 @@ export default function TestRunnerPage() {
                 if (evt.type === 'pw_suite_done') setPwLogs(p => [...p, { text: `🎭 ■ ${evt.result?.name} — ${evt.result?.summary?.passed}/${evt.result?.summary?.total} passed`, color: evt.result?.status === 'PASS' ? '#10b981' : '#ef4444' }]);
               });
               socket.on('pw-complete', (data) => { setPwPhase('done'); setPwResults(data); });
-              socket.emit('run-playwright', { grafanaUrl, token, suites: Array.from(pwSelected), datasourceFilter });
+              socket.emit('run-playwright', { grafanaUrl, token, suites: Array.from(pwSelected), datasourceFilter, pluginFilter });
             }}
           >
             {pwPhase === 'running' && <span style={st.spinner} />}
@@ -955,7 +1006,7 @@ export default function TestRunnerPage() {
                 if (evt.type === 'jm_plan_done') setJmLogs(p => [...p, { text: `🔥 ■ ${evt.planId} — ${evt.result?.summary?.total || 0} samples, ${evt.result?.summary?.avgMs || 0}ms avg, ${evt.result?.summary?.errorRate}`, color: evt.result?.status === 'PASS' ? '#10b981' : '#ef4444' }]);
               });
               socket.on('jm-complete', data => { setJmPhase('done'); setJmResults(data); });
-              socket.emit('run-jmeter', { grafanaUrl, token, plans: Array.from(jmSelected), threads: jmThreads, duration: jmDuration, datasourceFilter });
+              socket.emit('run-jmeter', { grafanaUrl, token, plans: Array.from(jmSelected), threads: jmThreads, duration: jmDuration, datasourceFilter, pluginFilter });
             }}>
             {jmPhase === 'running' && <span style={st.spinner} />}
             {jmPhase === 'running' ? 'Running Performance Tests...' : `🔥 Run ${jmSelected.size || 'All'} Performance Plans`}
@@ -1138,6 +1189,155 @@ export default function TestRunnerPage() {
             )}
             {datasourceUid && !dsImpact && (
               <div style={{ fontSize: 11, color: '#64748b' }}>Computing blast radius...</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Scope by Plugin (optional) ── */}
+      {envConfigured && (
+        <div style={{ marginBottom: 16 }} data-tour="plugin-scope">
+          <div style={st.sectionLabel}>Scope by Plugin (optional)</div>
+          <div style={{
+            padding: '12px 16px', borderRadius: 8,
+            background: '#0f172a',
+            border: `1.5px solid ${pluginId ? '#6366f1' : '#1e293b'}`,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>🧩</span>
+              <select
+                value={pluginId}
+                onChange={(e) => setPluginId(e.target.value)}
+                disabled={pluginLoading}
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 6,
+                  background: '#030712', border: '1px solid #1e293b', color: '#e2e8f0',
+                  fontSize: 13, fontFamily: 'inherit',
+                }}
+              >
+                <option value="">— All plugins (no filter) —</option>
+                {plugins.map((p) => {
+                  const flags = [];
+                  if (p.decommissioned) flags.push('⚠ DECOMMISSIONED');
+                  if (p.angular) flags.push('⚠ ANGULAR');
+                  if (p.signature && p.signature !== 'valid' && p.signature !== 'internal') flags.push(`sig:${p.signature}`);
+                  const flagStr = flags.length ? ` — ${flags.join(' · ')}` : '';
+                  const ver = p.installedVersion && p.installedVersion !== 'unknown' ? p.installedVersion : null;
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {p.name || p.id}{ver ? ` v${ver}` : ''}{flagStr}
+                    </option>
+                  );
+                })}
+              </select>
+              {pluginId && (
+                <button
+                  onClick={() => setPluginId('')}
+                  style={{
+                    background: 'none', border: '1px solid #334155',
+                    color: '#94a3b8', borderRadius: 6, padding: '6px 10px',
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {pluginLoading && (
+              <div style={{ fontSize: 11, color: '#64748b' }}>Loading plugins...</div>
+            )}
+            {!pluginLoading && plugins.length === 0 && (
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                No plugins found — verify env credentials in Settings.
+              </div>
+            )}
+
+            {/* Decommission banner — shown at the top when applicable */}
+            {pluginId && pluginUpdate?.decommissioned && (
+              <div style={{
+                padding: '10px 12px', borderRadius: 6,
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                fontSize: 12, color: '#fca5a5', lineHeight: 1.5,
+              }}>
+                <strong>⛔ Decommissioned:</strong> this plugin is end-of-life and no
+                longer maintained. Plan a migration — every panel using it will break
+                in a future Grafana release.
+              </div>
+            )}
+
+            {/* Version info */}
+            {pluginId && pluginUpdate && (
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
+                padding: '10px 12px', borderRadius: 6,
+                background: 'rgba(99, 102, 241, 0.05)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+              }}>
+                <div>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 }}>Installed</div>
+                  <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600 }}>v{pluginUpdate.installedVersion || '?'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 }}>Latest</div>
+                  <div style={{ fontSize: 13, color: pluginUpdate.updateAvailable ? '#fbbf24' : '#10b981', fontWeight: 600 }}>
+                    v{pluginUpdate.latestVersion || '?'}{pluginUpdate.updateAvailable ? ' ↑' : ' ✓'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 }}>Update type</div>
+                  <div style={{
+                    fontSize: 13, fontWeight: 600,
+                    color: pluginUpdate.updateType === 'major' ? '#ef4444'
+                         : pluginUpdate.updateType === 'minor' ? '#fbbf24'
+                         : pluginUpdate.updateType === 'patch' ? '#10b981' : '#94a3b8',
+                  }}>
+                    {pluginUpdate.updateType || 'up-to-date'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Breaking-change warnings */}
+            {pluginId && Array.isArray(pluginUpdate?.breakingChanges) && pluginUpdate.breakingChanges.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pluginUpdate.breakingChanges.map((w, i) => {
+                  const color = w.level === 'critical' ? '#ef4444'
+                             : w.level === 'high' ? '#f97316'
+                             : w.level === 'medium' ? '#fbbf24'
+                             : '#94a3b8';
+                  return (
+                    <div key={i} style={{
+                      padding: '8px 12px', borderRadius: 6,
+                      background: `${color}14`,
+                      border: `1px solid ${color}55`,
+                      fontSize: 12, color: '#cbd5e1', lineHeight: 1.4,
+                    }}>
+                      <strong style={{ color }}>{w.level?.toUpperCase() || 'WARN'}:</strong> {w.message}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Impact / blast radius */}
+            {pluginId && pluginImpact && (
+              <div style={{
+                padding: '10px 12px', borderRadius: 6,
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                fontSize: 12, color: '#cbd5e1', lineHeight: 1.5,
+              }}>
+                <strong style={{ color: '#a5b4fc' }}>Blast radius:</strong>{' '}
+                {pluginImpact.summary?.dashboardCount || 0} dashboard(s),{' '}
+                {pluginImpact.summary?.totalAffectedPanels || 0} panel(s),{' '}
+                {pluginImpact.summary?.alertCount || 0} alert rule(s) use this plugin.
+                Playwright will scope panel validation to these dashboards.
+              </div>
+            )}
+            {pluginId && !pluginUpdate && !pluginImpact && (
+              <div style={{ fontSize: 11, color: '#64748b' }}>Computing version + blast radius...</div>
             )}
           </div>
         </div>

@@ -44,6 +44,27 @@ export const api = {
   getSnapshotDashboard: (snapshotId, uid) => request('GET', `/api/snapshots/${snapshotId}/dashboards/${uid}`),
   getSnapshotStorageInfo: () => request('GET', '/api/snapshots/storage-info'),
 
+  // Plugins (Plugin Validation page)
+  listInstalledPlugins: (grafanaUrl, token) => {
+    const qs = new URLSearchParams();
+    if (grafanaUrl) qs.set('grafanaUrl', grafanaUrl);
+    if (token) qs.set('token', token);
+    return request('GET', `/api/plugins/installed?${qs.toString()}`);
+  },
+  getPluginUpdateInfo: (id, grafanaUrl, token) => {
+    const qs = new URLSearchParams();
+    if (grafanaUrl) qs.set('grafanaUrl', grafanaUrl);
+    if (token) qs.set('token', token);
+    return request('GET', `/api/plugins/${encodeURIComponent(id)}/update-info?${qs.toString()}`);
+  },
+  getPluginImpact: (id, grafanaUrl, token) => {
+    const qs = new URLSearchParams();
+    if (grafanaUrl) qs.set('grafanaUrl', grafanaUrl);
+    if (token) qs.set('token', token);
+    return request('GET', `/api/plugins/${encodeURIComponent(id)}/impact?${qs.toString()}`);
+  },
+  validatePlugin: (id, body) => request('POST', `/api/plugins/${encodeURIComponent(id)}/validate`, body),
+
   // Email
   getEmailConfig: () => request('GET', '/api/email/config'),
   saveEmailConfig: (cfg) => request('POST', '/api/email/config', cfg),
