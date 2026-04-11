@@ -31,6 +31,10 @@
   <img src="docs/assets/heimdall-demo.gif" alt="Heimdall 60-second walkthrough" width="100%">
 </p>
 
+<p align="center">
+  <img src="docs/assets/screenshots/00-splash.png" alt="Heimdall launch splash" width="100%">
+</p>
+
 ---
 
 ## 🤔 Why Heimdall?

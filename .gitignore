@@ -14,6 +14,10 @@ backend/.snapshots/
 backend/.test-screenshots/
 backend/data/email-config.json
 
+# …but the demo screenshots under docs/ ARE committed
+!docs/assets/screenshots/
+!docs/assets/screenshots/**/*.png
+
 # Build output
 frontend/build/
 

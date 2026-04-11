@@ -322,10 +322,8 @@ export default function UserTour({ onComplete }) {
       display: 'flex', alignItems: 'center', gap: 10,
     },
     headerLogo: {
-      fontSize: 20, fontWeight: 800,
-      background: 'linear-gradient(135deg, #6366f1, #a78bfa)',
-      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-      backgroundClip: 'text',
+      fontSize: 22, lineHeight: 1,
+      filter: 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.5))',
     },
     headerTitle: { color: '#e2e8f0', fontSize: 14, fontWeight: 600, flex: 1 },
     headerStep: { color: '#64748b', fontSize: 11, fontWeight: 600 },
@@ -401,7 +399,7 @@ export default function UserTour({ onComplete }) {
       {/* Tour panel */}
       <div style={styles.panel} role="dialog" aria-label="Heimdall product tour">
         <div style={styles.header}>
-          <span style={styles.headerLogo}>H</span>
+          <span style={styles.headerLogo}>🔱</span>
           <span style={styles.headerTitle}>Welcome Tour</span>
           <span style={styles.headerStep}>{step + 1} / {TOUR_STEPS.length}</span>
           <button

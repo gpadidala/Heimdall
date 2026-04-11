@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Sidebar from './components/Common/Sidebar';
+import SplashScreen, { shouldShowSplash } from './components/Common/SplashScreen';
 import UserTour from './components/Onboarding/UserTour';
 import DashboardPage from './components/Dashboard/DashboardPage';
 import TestRunnerPage from './components/TestRunner/TestRunnerPage';
@@ -25,12 +26,16 @@ const mainStyle = {
   maxHeight: '100vh',
 };
 
-function AppShell() {
+function AppShell({ splashVisible }) {
   const { showOnboarding, closeOnboarding } = useApp();
+
+  // Suppress the Welcome Tour while the splash animation is playing —
+  // otherwise both open simultaneously and compete for the viewport.
+  const canShowTour = showOnboarding && !splashVisible;
 
   return (
     <BrowserRouter>
-      {showOnboarding && <UserTour onComplete={closeOnboarding} />}
+      {canShowTour && <UserTour onComplete={closeOnboarding} />}
       <div style={layoutStyle}>
         <Sidebar />
         <main style={mainStyle}>
@@ -50,9 +55,15 @@ function AppShell() {
 }
 
 export default function App() {
+  // Splash plays once per browser session on first load. After the
+  // animation completes (or if the session already saw it), the main
+  // app renders underneath.
+  const [splashVisible, setSplashVisible] = useState(() => shouldShowSplash());
+
   return (
     <AppProvider>
-      <AppShell />
+      {splashVisible && <SplashScreen onDone={() => setSplashVisible(false)} />}
+      <AppShell splashVisible={splashVisible} />
     </AppProvider>
   );
 }

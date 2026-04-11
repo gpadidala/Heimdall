@@ -23,10 +23,8 @@ const SIDEBAR_CSS = `
 }
 .gp-sidebar-logo-row { display: flex; align-items: center; gap: 10px; }
 .gp-sidebar-logo-text {
-  font-size: 28px; font-weight: 800;
-  background: linear-gradient(135deg, #6366f1, #a78bfa);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text; letter-spacing: -0.5px; line-height: 1;
+  font-size: 32px; line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.45));
 }
 .gp-sidebar-brand { font-size: 16px; font-weight: 600; color: #e2e8f0; letter-spacing: -0.2px; }
 .gp-sidebar-badge {
@@ -149,7 +147,7 @@ export default function Sidebar() {
     <aside className="gp-sidebar">
       <div className="gp-sidebar-logo">
         <div className="gp-sidebar-logo-row">
-          <span className="gp-sidebar-logo-text">H</span>
+          <span className="gp-sidebar-logo-text" role="img" aria-label="Heimdall">🔱</span>
           <div>
             <span className="gp-sidebar-brand">Heimdall</span>
             <span className="gp-sidebar-badge">v3.0</span>
