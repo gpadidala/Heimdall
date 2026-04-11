@@ -4,7 +4,7 @@
 
 <h1 align="center">GrafanaProbe</h1>
 
-<p align="center"><em>Validate every layer of your Grafana stack — with 17 test categories, AI failure analysis, and a dependency graph.</em></p>
+<p align="center"><em>One platform. Three engines. Every layer of your Grafana stack.<br>K6 API tests · Playwright E2E · JMeter performance — plus AI-generated test suites, failure analysis, and a dependency graph.</em></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT License"></a>
@@ -37,7 +37,9 @@
 
 Grafana is the default observability UI for most infrastructure teams — but **upgrades, plugin updates, and silent config drift break dashboards in ways you only discover during an incident**. A renamed datasource breaks 40 panels. A schema version bump turns graph panels into empty rectangles. An alert rule loses its receiver. And nobody notices until the on-call engineer is staring at a blank screen at 3am.
 
-GrafanaProbe fixes this by running **17 categories of systematic validation** against your live Grafana API and persisting every result. Instead of one smoke test, you get a full audit: every dashboard loads, every panel renders, every query returns data within SLA, every alert rule has a receiver, every plugin signature is valid, every folder has sensible permissions, and every reference resolves. When something breaks, you see **which upgrade introduced it, which dashboards are affected, and who owns them** — before your users do.
+**Before GrafanaProbe**, you had three separate tools: K6 scripts for API load, Playwright specs for browser tests, JMeter JMX files for performance. Each with its own runner, its own results, its own CI wiring. And zero visibility into how they connect to each other or to the dashboards that actually matter.
+
+**GrafanaProbe unifies all three engines into one platform**: **K6 API tests** (22 categories of functional checks), **Playwright E2E** (12 real-browser suites), and **JMeter performance** (18 load plans) — all driven from one React UI, one set of credentials, one results database. Add **AI-generated test suites** on top (describe what you want to test in plain English, Claude or GPT writes a safe read-only test plan you can approve and run) and **AI-powered failure analysis** that explains every red badge in plain English.
 
 Built for **SREs, Platform Engineers, and Grafana Admins** who run Grafana as critical infrastructure. If your org has more than 50 dashboards, more than one environment, or upgrades Grafana without a panic room on the calendar — this is for you.
 
@@ -47,16 +49,72 @@ Built for **SREs, Platform Engineers, and Grafana Admins** who run Grafana as cr
 
 | | |
 |---|---|
-| 🧪 **17 Test Categories** | Systematic coverage from API health to data freshness — not just smoke tests |
+| ⚡ **Three Engines, One Platform** | **K6 API** (22 categories) + **Playwright E2E** (12 suites) + **JMeter performance** (18 plans) — all in one UI, one results database |
+| 🧠 **AI Test Generator** | Describe tests in plain English — Claude or GPT writes a safe, whitelisted test plan you review and run. Ships with 5 pre-built Smart Suite templates |
+| 🤖 **AI Failure Analysis** | Every failing test gets an AI-explained root cause + suggested fix, right in the report |
+| 🧪 **17 Test Categories** | Systematic functional coverage from API health to data freshness — not just smoke tests |
+| 🎭 **Playwright E2E** | 12 real-browser suites: login, navigation, dashboard render, alerting UI, visual regression |
+| 🔥 **JMeter Performance** | 18 load-test plans with live metrics: API stress, auth throughput, query pressure, capacity planning |
 | 🔗 **Clickable Grafana Deep Links** | Every WARN/FAIL result links straight to the dashboard, panel, or alert rule that broke |
-| 🧠 **AI Failure Analysis** | OpenAI or Anthropic Claude explains failures in plain English with recommended fixes |
 | 🗺️ **Dependency Graph** | Trace "if I upgrade this plugin, which 47 dashboards explode?" before you upgrade |
 | 🌍 **Multi-Environment** | Switch between DEV / PERF / PROD with one click; each env has its own token |
+| 🎯 **Scope by Datasource** | Test only the dashboards/alerts that reference a specific DS — perfect for exporter-upgrade blast-radius checks |
+| 📸 **Panel-Level Screenshots** | Playwright auto-captures failing panels as gzipped PNGs, embedded inline in the HTML report |
+| 📧 **Email Notifications** | One click to notify the dashboard's createdBy/updatedBy + default CC with SMTP + Grafana user lookup |
 | ⚡ **Live Progress Stream** | WebSocket-driven real-time updates so you see tests fail as they happen |
 | 🐳 **Docker & Podman Ready** | One command spins up a pre-seeded demo — no Grafana required to try it |
 | ⏰ **Cron Scheduler** | Schedule recurring test runs and get notified when things break |
-| 📋 **HTML + JSON Reports** | Standalone branded reports with donut charts, filterable tables, and deep links |
+| 📋 **HTML + JSON Reports** | Standalone branded reports with 7-column layout, creator/updater columns, clickable deep links |
 | 🔄 **CI/CD Integration** | Drop into GitHub Actions, GitLab CI, or Jenkins with a single curl command |
+
+---
+
+## ⚡ Three Engines. One Platform.
+
+Most teams stitch together three separate tools for Grafana testing. GrafanaProbe gives you all three under one roof with a shared results store, one set of credentials, and a unified Run Tests UI:
+
+<table>
+  <tr>
+    <th width="33%" align="center">⚡ K6 API</th>
+    <th width="33%" align="center">🎭 Playwright E2E</th>
+    <th width="33%" align="center">🔥 JMeter Performance</th>
+  </tr>
+  <tr>
+    <td align="center"><strong>22 categories</strong><br><sub>~7,000+ assertions</sub></td>
+    <td align="center"><strong>12 suites</strong><br><sub>24 specs, real Chromium</sub></td>
+    <td align="center"><strong>18 plans</strong><br><sub>core + scenario + stress</sub></td>
+  </tr>
+  <tr>
+    <td>API health, datasources, dashboards, panels, alerts, plugins, folders, users, annotations, query latency, config audit, provisioning, data freshness, capacity planning, K8s dashboards, plugin upgrade, multi-org, baseline regression, pre-deploy, post-deploy, alert E2E, and more</td>
+    <td>Smoke (login / nav / health), Dashboard E2E (load / variables / time picker), Panel rendering, Alerting (rules / contacts / policies), Plugins, Datasources, Admin (users / teams / settings), Explore, Visual regression, Web Vitals, Security, K8s</td>
+    <td>API health load, auth stress, dashboard load, DS query stress, alert eval, plugin API, search perf, mixed workload, spike test, capacity planning, deployment check, K8s load, and more</td>
+  </tr>
+</table>
+
+**All three engines** honor the same [Scope by Datasource](docs/features/dependency-graph.md) filter, the same [multi-env](docs/features/environments.md) selector, and land in the same unified Reports UI. Run them individually or mix and match in one test execution.
+
+---
+
+## 🧠 AI Test Suites — describe, approve, run
+
+Beyond AI *failure analysis*, GrafanaProbe ships with a full **AI Dynamic Test Generator** that turns natural-language prompts into executable test plans:
+
+```
+"Verify my Grafana is ready for an upgrade — check all datasources are
+ healthy, no plugins are broken, admin stats look reasonable."
+```
+
+Claude or GPT converts this into a structured JSON test plan using a **whitelisted action vocabulary** (GET-only Grafana API calls, assertions, iterations). You review the plan, optionally edit the JSON, click **Approve & Run**, and get results explained by the same LLM. Save any plan as a reusable **Smart Suite** — 5 templates ship out of the box:
+
+| Smart Suite | What it tests |
+|---|---|
+| 🚀 **Upgrade Readiness Check** | All DS healthy, plugins loaded, instance health endpoint responsive |
+| 📊 **Dashboard Load Performance** | Every dashboard loads in under 2 seconds |
+| 🔒 **RBAC & Access Audit** | Users, admin count, service accounts inventory |
+| 🔔 **Alert Rule Coverage** | Rules defined, contact points configured, policies valid |
+| 📁 **Folder Organization** | Dashboards organized into folders, not all in General |
+
+See [AI Test Generator docs](docs/features/ai-analysis.md) for the full action vocabulary and safety model.
 
 ---
 
@@ -175,9 +233,9 @@ cd grafana-probe
 ./demo-run.sh
 ```
 
-Then open **<http://localhost:3001>** and click **Run Tests**.
+Then open **<http://localhost:3001>** and click **Run Tests** — pick any engine tab (K6 API / Playwright E2E / JMeter) and go.
 
-> 💡 **Tip:** The demo spins up a pre-configured Grafana instance with 7 sample dashboards — no need to connect your own Grafana to try GrafanaProbe. Your first test run completes in under 30 seconds and you'll see the full UI, the HTML report, and the dependency graph on real data.
+> 💡 **Tip:** The demo spins up a pre-configured Grafana instance with 7 sample dashboards — no need to connect your own Grafana to try GrafanaProbe. Your first K6 run finishes in under 30 seconds. You'll also have **AI Tests** ready to go (add an LLM key in Settings) and the **dependency graph** populated from real data.
 
 ### Option B — Manual setup
 
@@ -333,12 +391,14 @@ Full REST documentation: [docs/api/rest-reference.md](docs/api/rest-reference.md
 
 ## 🗺️ Roadmap
 
-- [x] **V2.0** — 17 test categories, React UI, SQLite persistence, AI failure analysis, dependency graph
-- [x] **V2.1** — AI Dynamic Test Generator (conversational test creation in plain English)
-- [x] **V2.2** — Dashboard Snapshot & Upgrade Diff (semantic diffing across snapshots)
-- [ ] **V2.3** — Cross-environment comparison + automatic drift detection
-- [ ] **V2.4** — Visual dashboard regression testing (pixel diff with Playwright screenshots)
-- [ ] **V2.5** — Slack / Teams / PagerDuty integrations for scheduled run alerts
+- [x] **V2.0** — 17 K6 test categories, React UI, SQLite persistence, AI failure analysis, dependency graph
+- [x] **V2.1** — **Playwright E2E** (12 suites) + **JMeter performance** (18 plans) — three engines unified
+- [x] **V2.2** — **AI Dynamic Test Generator** with Smart Suites (conversational test creation in plain English)
+- [x] **V2.3** — Dashboard Snapshot & Upgrade Diff (semantic diffing across snapshots)
+- [x] **V2.4** — Scope by Datasource, SMTP email notifications, per-panel screenshots in reports
+- [ ] **V2.5** — Cross-environment comparison + automatic drift detection
+- [ ] **V2.6** — Visual dashboard regression testing (pixel diff between snapshots)
+- [ ] **V2.7** — Slack / Teams / PagerDuty integrations for scheduled run alerts
 
 Have a feature idea? [Open a feature request](.github/ISSUE_TEMPLATE/feature_request.md).
 
