@@ -92,17 +92,29 @@ function flattenPanels(panels) {
  * angular/deprecation flags from local heuristics. Does NOT call out
  * to grafana.com — call getUpdateInfo() per plugin for that.
  */
-async function listInstalledPlugins(client) {
+async function listInstalledPlugins(client, { includeCore = true, includeEmbedded = true } = {}) {
   const r = await client.getPlugins();
   if (!r.ok) throw new Error(`getPlugins failed: ${r.error || 'unknown'}`);
 
-  const list = (r.data || []).map((p) => {
+  const raw = Array.isArray(r.data) ? r.data : [];
+
+  const list = raw.map((p) => {
     const id = p.id || p.slug;
     const installedVersion = (p.info && p.info.version) || p.version || 'unknown';
     const angular = (p.angular && p.angular.detected === true)
       || p.angularDetected === true
       || KNOWN_ANGULAR_PLUGINS.has(id);
     const decommissioned = KNOWN_DECOMMISSIONED.has(id);
+
+    // Grafana exposes category via `category` (string) and flags core/embedded
+    // plugins via `signatureType === 'grafana'` + the `category` field. The
+    // exact schema varies across 9.x → 12.x, so we probe multiple fields.
+    const category = p.category || (p.signatureType === 'grafana' ? 'core' : 'external');
+    const isCore = category === 'core'
+      || p.signatureType === 'grafana'
+      || (typeof id === 'string' && id.startsWith('grafana-') && p.signature === 'internal');
+    const isEmbedded = p.embedded === true || p.parent != null;
+
     return {
       id,
       name: p.name || id,
@@ -113,6 +125,10 @@ async function listInstalledPlugins(client) {
       hasUpdate: p.hasUpdate === true,
       angular,
       decommissioned,
+      core: isCore,
+      embedded: isEmbedded,
+      category,
+      parent: p.parent || null,           // app plugin id this one is embedded in, if any
       info: {
         author: (p.info && p.info.author && p.info.author.name) || null,
         description: (p.info && p.info.description) || null,
@@ -121,16 +137,35 @@ async function listInstalledPlugins(client) {
     };
   });
 
-  // Stable sort: panel plugins first, then datasource, then app, alphabetical within
-  const order = { panel: 0, datasource: 1, app: 2, renderer: 3, unknown: 4 };
-  list.sort((a, b) => {
-    const oa = order[a.type] ?? 99;
-    const ob = order[b.type] ?? 99;
+  const filtered = list.filter((p) => {
+    if (!includeCore && p.core) return false;
+    if (!includeEmbedded && p.embedded) return false;
+    return true;
+  });
+
+  // Stable sort: external first (most interesting for upgrade planning),
+  // then core, then embedded. Within each group: panel → datasource → app → renderer, alphabetical.
+  const typeOrder = { panel: 0, datasource: 1, app: 2, renderer: 3, unknown: 4 };
+  const groupOrder = (p) => (p.embedded ? 2 : (p.core ? 1 : 0));
+  filtered.sort((a, b) => {
+    const ga = groupOrder(a);
+    const gb = groupOrder(b);
+    if (ga !== gb) return ga - gb;
+    const oa = typeOrder[a.type] ?? 99;
+    const ob = typeOrder[b.type] ?? 99;
     if (oa !== ob) return oa - ob;
     return a.name.localeCompare(b.name);
   });
 
-  return list;
+  logger.info('Heimdall: listed installed plugins', {
+    total: filtered.length,
+    raw: raw.length,
+    core: filtered.filter((p) => p.core).length,
+    embedded: filtered.filter((p) => p.embedded).length,
+    external: filtered.filter((p) => !p.core && !p.embedded).length,
+  });
+
+  return filtered;
 }
 
 /**

@@ -88,11 +88,17 @@ const pluginCheck = require('./services/pluginCheck');
 
 app.get('/api/plugins/installed', async (req, res) => {
   try {
-    const { grafanaUrl, token } = req.query;
+    const { grafanaUrl, token, includeCore, includeEmbedded } = req.query;
     const url = (grafanaUrl && String(grafanaUrl).trim()) || config.grafana.url;
     const tok = (token && String(token).trim()) || config.grafana.token;
     const client = new GrafanaClient(url, tok);
-    const list = await pluginCheck.listInstalledPlugins(client);
+    // Default to showing everything — what an operator expects when they
+    // open the Plugins page in prod. Pass includeCore=0 / includeEmbedded=0
+    // to narrow down from the UI.
+    const list = await pluginCheck.listInstalledPlugins(client, {
+      includeCore: includeCore !== '0' && includeCore !== 'false',
+      includeEmbedded: includeEmbedded !== '0' && includeEmbedded !== 'false',
+    });
     res.json(list);
   } catch (err) {
     logger.error('plugins/installed failed', { error: err.message });

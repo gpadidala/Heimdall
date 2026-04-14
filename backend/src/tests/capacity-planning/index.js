@@ -152,13 +152,20 @@ async function run(client, _depGraph, options = {}) {
   });
 
   // 3. Plugin count
+  // getPlugins() now returns core + embedded plugins too (see grafanaClient),
+  // so count only non-core, non-embedded plugins for the capacity signal —
+  // core plugins ship with Grafana and don't drive capacity decisions.
   const pluginRes = await client.getPlugins();
   let pluginCount = 0;
   let appPluginCount = 0;
   let panelPluginCount = 0;
   let dsPluginCount = 0;
   if (pluginRes.ok) {
-    const plugins = pluginRes.data || [];
+    const plugins = (pluginRes.data || []).filter((p) => {
+      if (p.signatureType === 'grafana' || p.category === 'core') return false;
+      if (p.embedded === true || p.parent != null) return false;
+      return true;
+    });
     pluginCount = plugins.length;
     appPluginCount = plugins.filter(p => p.type === 'app').length;
     panelPluginCount = plugins.filter(p => p.type === 'panel').length;
@@ -167,7 +174,7 @@ async function run(client, _depGraph, options = {}) {
   results.push({
     name: `${CAT}:plugin-count`,
     status: pluginCount > 50 ? 'WARN' : 'PASS',
-    detail: `${pluginCount} plugins installed (${appPluginCount} app, ${panelPluginCount} panel, ${dsPluginCount} datasource)`,
+    detail: `${pluginCount} external plugins installed (${appPluginCount} app, ${panelPluginCount} panel, ${dsPluginCount} datasource)`,
     uid: null,
     ms: pluginRes.ms || 0,
     metadata: { pluginCount, appPluginCount, panelPluginCount, dsPluginCount },

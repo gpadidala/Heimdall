@@ -97,7 +97,11 @@ class GrafanaClient {
   async getSilences() { return this.get('/api/alertmanager/grafana/api/v2/silences'); }
 
   // ─── Plugins ───
-  async getPlugins() { return this.get('/api/plugins?embedded=0'); }
+  // IMPORTANT: Grafana's /api/plugins defaults to excluding BOTH core plugins
+  // and plugins embedded inside app plugins (Synthetic Monitoring, Cloud,
+  // Faro, Incident, etc). Pass embedded=1&core=1 so Heimdall sees every
+  // installed plugin — the frontend is responsible for filtering/badging.
+  async getPlugins() { return this.get('/api/plugins?embedded=1&core=1'); }
   async getPluginSettings(id) { return this.get(`/api/plugins/${id}/settings`); }
   async getPluginHealth(id) { return this.get(`/api/plugins/${id}/health`); }
 

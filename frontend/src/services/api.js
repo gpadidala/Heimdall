@@ -45,10 +45,15 @@ export const api = {
   getSnapshotStorageInfo: () => request('GET', '/api/snapshots/storage-info'),
 
   // Plugins (Plugin Validation page)
-  listInstalledPlugins: (grafanaUrl, token) => {
+  // opts: { includeCore, includeEmbedded } — both default to true so callers
+  // see every installed plugin (core + embedded + external). Pass false to
+  // narrow the list for the Plugin Validation page.
+  listInstalledPlugins: (grafanaUrl, token, opts = {}) => {
     const qs = new URLSearchParams();
     if (grafanaUrl) qs.set('grafanaUrl', grafanaUrl);
     if (token) qs.set('token', token);
+    if (opts.includeCore === false) qs.set('includeCore', '0');
+    if (opts.includeEmbedded === false) qs.set('includeEmbedded', '0');
     return request('GET', `/api/plugins/installed?${qs.toString()}`);
   },
   getPluginUpdateInfo: (id, grafanaUrl, token) => {
