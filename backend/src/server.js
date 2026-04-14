@@ -14,6 +14,7 @@ const DashboardSnapshotService = require('./services/snapshot');
 const snapshotDiffEngine = require('./services/snapshotDiff');
 const snapshotAI = require('./services/snapshotAI');
 const snapshotStorage = require('./services/snapshotStorage');
+const dashboardScreenshot = require('./services/dashboardScreenshot');
 const AIDynamicTestGenerator = require('./services/adtg');
 const { ops, saveDb } = require('./db');
 const crypto = require('crypto');
@@ -1252,6 +1253,124 @@ app.post('/api/snapshots/:id/restore', async (req, res) => {
     const result = await svc.restoreDashboard(req.params.id, dashboardUid, { allowWrites: true });
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Dashboard Screenshot Bundles ────────────────────────────────────
+// Takes a full-page PNG of every matching dashboard (scrolling through
+// lazy-loaded panels before capture) and packages them into one zip for
+// offline reference. Filters mirror the Plugin scope / Datasource scope
+// controls from the Test Runner page.
+//
+// Request body:
+//   { grafanaUrl, token, orgId, name, filter: { all, uids, datasourceUid,
+//     datasourceType, pluginId }, maxDashboards }
+//
+// Progress events stream over the `screenshots:progress` WebSocket channel.
+app.post('/api/screenshots/dashboards', async (req, res) => {
+  try {
+    const {
+      grafanaUrl,
+      token,
+      orgId,
+      name,
+      filter = { all: true },
+      maxDashboards,
+    } = req.body || {};
+
+    const result = await dashboardScreenshot.captureDashboardScreenshots({
+      grafanaUrl: grafanaUrl || config.grafana.url,
+      token: token || config.grafana.token,
+      orgId: orgId || config.grafana.orgId,
+      name,
+      filter,
+      maxDashboards: maxDashboards || 500,
+      onProgress: (evt) => io.emit('screenshots:progress', evt),
+    });
+
+    res.json({
+      id: result.id,
+      name: result.name,
+      dashboardCount: result.manifest.dashboardCount,
+      succeeded: result.manifest.succeeded,
+      failed: result.manifest.failed,
+      zipBytes: result.zipBytes,
+      durationMs: result.manifest.durationMs,
+      downloadUrl: `/api/screenshots/bundles/${result.id}/download`,
+    });
+  } catch (err) {
+    logger.error('Screenshot capture failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/screenshots/bundles', async (req, res) => {
+  try {
+    res.json(dashboardScreenshot.listBundles());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/screenshots/bundles/:id', async (req, res) => {
+  try {
+    const bundle = dashboardScreenshot.getBundle(req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
+    // Attach the full manifest so the UI can show per-dashboard captures.
+    const manifestPath = path.join(bundle.dir, 'manifest.json');
+    const manifest = fs.existsSync(manifestPath)
+      ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+      : null;
+    res.json({ ...bundle, manifest });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/screenshots/bundles/:id/download', async (req, res) => {
+  try {
+    const bundle = dashboardScreenshot.getBundle(req.params.id);
+    if (!bundle || !bundle.zipPath || !fs.existsSync(bundle.zipPath)) {
+      return res.status(404).json({ error: 'Bundle zip not found' });
+    }
+    const safeName = String(bundle.name || bundle.id).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filename = `heimdall-screenshots-${safeName}-${bundle.id.slice(0, 8)}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(bundle.zipBytes));
+    fs.createReadStream(bundle.zipPath).pipe(res);
+  } catch (err) {
+    logger.error('Screenshot download failed', { error: err.message });
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// Serve an individual PNG from inside a bundle so the UI can preview
+// captures without unpacking the zip. Path-traversal hardened.
+app.get('/api/screenshots/bundles/:id/dashboards/:uid.png', async (req, res) => {
+  try {
+    const bundle = dashboardScreenshot.getBundle(req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
+    const safeUid = String(req.params.uid).replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeUid) return res.status(400).json({ error: 'Invalid uid' });
+    const file = path.join(bundle.dir, 'dashboards', `${safeUid}.png`);
+    if (!file.startsWith(bundle.dir) || !fs.existsSync(file)) {
+      return res.status(404).json({ error: 'Screenshot not found' });
+    }
+    res.setHeader('Content-Type', 'image/png');
+    fs.createReadStream(file).pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/screenshots/bundles/:id', async (req, res) => {
+  try {
+    const ok = dashboardScreenshot.deleteBundle(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Bundle not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── SPA Fallback ───

@@ -44,6 +44,21 @@ export const api = {
   getSnapshotDashboard: (snapshotId, uid) => request('GET', `/api/snapshots/${snapshotId}/dashboards/${uid}`),
   getSnapshotStorageInfo: () => request('GET', '/api/snapshots/storage-info'),
 
+  // Dashboard screenshot bundles — full-page PNGs for every matched
+  // dashboard, packaged as a single zip for offline reference.
+  captureDashboardScreenshots: (body) =>
+    request('POST', '/api/screenshots/dashboards', body),
+  listScreenshotBundles: () =>
+    request('GET', '/api/screenshots/bundles'),
+  getScreenshotBundle: (id) =>
+    request('GET', `/api/screenshots/bundles/${encodeURIComponent(id)}`),
+  deleteScreenshotBundle: (id) =>
+    request('DELETE', `/api/screenshots/bundles/${encodeURIComponent(id)}`),
+  screenshotDownloadUrl: (id) =>
+    `/api/screenshots/bundles/${encodeURIComponent(id)}/download`,
+  screenshotPreviewUrl: (id, uid) =>
+    `/api/screenshots/bundles/${encodeURIComponent(id)}/dashboards/${encodeURIComponent(uid)}.png`,
+
   // Plugins (Plugin Validation page)
   // opts: { includeCore, includeEmbedded } — both default to true so callers
   // see every installed plugin (core + embedded + external). Pass false to

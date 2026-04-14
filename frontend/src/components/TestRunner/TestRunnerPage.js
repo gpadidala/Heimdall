@@ -94,6 +94,15 @@ export default function TestRunnerPage() {
   const [pluginImpact, setPluginImpact] = useState(null);
   const [pluginLoading, setPluginLoading] = useState(false);
 
+  /* ── Dashboard screenshot bundles — full-page PNGs of every dashboard
+     matching the current scope (datasource / plugin / all), packaged as a
+     single zip for offline reference. State machine: idle → capturing →
+     done. Progress events arrive over the `screenshots:progress` WS. ── */
+  const [shotPhase, setShotPhase] = useState('idle'); // idle | capturing | done | error
+  const [shotProgress, setShotProgress] = useState(null);
+  const [shotResult, setShotResult] = useState(null);
+  const [shotError, setShotError] = useState(null);
+
   useEffect(() => { injectKF(); }, []);
 
   // Load datasources when env changes
@@ -160,6 +169,58 @@ export default function TestRunnerPage() {
 
   // Helper to build the pluginFilter payload for the backend
   const pluginFilter = pluginId ? { id: pluginId } : null;
+
+  /* ── dashboard screenshot bundle: WS progress subscription ─────── */
+  useEffect(() => {
+    const socket = getSocket();
+    const onShotProgress = (evt) => {
+      setShotProgress(evt || null);
+      if (evt && evt.stage === 'complete') {
+        // server's REST response will replace this with the full result;
+        // keep the WS payload as a fallback if the REST call is still in-flight.
+        setShotPhase((prev) => (prev === 'capturing' ? 'capturing' : prev));
+      }
+    };
+    socket.on('screenshots:progress', onShotProgress);
+    return () => { socket.off('screenshots:progress', onShotProgress); };
+  }, []);
+
+  const handleCaptureScreenshots = useCallback(async () => {
+    if (shotPhase === 'capturing') return;
+    setShotPhase('capturing');
+    setShotProgress(null);
+    setShotResult(null);
+    setShotError(null);
+
+    // Build filter from the current scope selection. Priority: uids (none
+    // available from this page) → plugin → datasource → all.
+    let filter;
+    let scopeLabel;
+    if (pluginId) {
+      filter = { pluginId };
+      scopeLabel = `plugin: ${pluginId}`;
+    } else if (datasourceUid) {
+      filter = { datasourceUid };
+      scopeLabel = `datasource: ${datasourceUid}`;
+    } else {
+      filter = { all: true };
+      scopeLabel = 'all dashboards';
+    }
+
+    const name = `${scopeLabel} · ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
+    try {
+      const result = await api.captureDashboardScreenshots({
+        grafanaUrl, token,
+        name,
+        filter,
+      });
+      setShotResult(result);
+      setShotPhase('done');
+    } catch (err) {
+      setShotError(err.message || String(err));
+      setShotPhase('error');
+    }
+  }, [grafanaUrl, token, pluginId, datasourceUid, shotPhase]);
 
   /* load categories */
   useEffect(() => {
@@ -1407,6 +1468,112 @@ export default function TestRunnerPage() {
             )}
             {pluginId && !pluginUpdate && !pluginImpact && (
               <div style={{ fontSize: 11, color: '#64748b' }}>Computing version + blast radius...</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Dashboard Screenshot Bundle ─────────────────────────────
+          Full-page PNG of every dashboard matching the current scope
+          (plugin / datasource / all), zipped for offline reference. ── */}
+      {envConfigured && (
+        <div style={{ marginBottom: 16 }} data-tour="screenshot-bundle">
+          <div style={st.sectionLabel}>Capture Dashboard Screenshots (optional)</div>
+          <div style={{
+            padding: '12px 16px', borderRadius: 8,
+            background: '#0f172a',
+            border: `1.5px solid ${shotPhase === 'capturing' ? '#f59e0b' : (shotPhase === 'done' ? '#10b981' : '#1e293b')}`,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 20 }}>📸</span>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600 }}>
+                  Full-page screenshots
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                  Scope: {pluginId
+                    ? <strong style={{ color: '#fbbf24' }}>plugin <code>{pluginId}</code></strong>
+                    : datasourceUid
+                      ? <strong style={{ color: '#60a5fa' }}>datasource <code>{datasourceUid}</code></strong>
+                      : <strong style={{ color: '#a5b4fc' }}>all dashboards</strong>}
+                  {' '}— each dashboard opened in headless Chromium, scrolled end-to-end, captured as PNG, zipped.
+                </div>
+              </div>
+              <button
+                onClick={handleCaptureScreenshots}
+                disabled={shotPhase === 'capturing'}
+                style={{
+                  padding: '8px 16px', borderRadius: 6,
+                  background: shotPhase === 'capturing' ? '#334155' : '#6366f1',
+                  color: '#fff', border: 'none',
+                  fontSize: 12, fontWeight: 700, cursor: shotPhase === 'capturing' ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', whiteSpace: 'nowrap',
+                }}
+              >
+                {shotPhase === 'capturing' ? 'Capturing...' : (shotPhase === 'done' ? 'Capture again' : 'Capture')}
+              </button>
+            </div>
+
+            {shotPhase === 'capturing' && shotProgress && (
+              <div style={{
+                padding: '8px 12px', borderRadius: 6,
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                fontSize: 11, color: '#fcd34d', lineHeight: 1.5,
+              }}>
+                <strong>{shotProgress.stage}</strong>
+                {shotProgress.completed != null && shotProgress.total != null && (
+                  <> — {shotProgress.completed}/{shotProgress.total}</>
+                )}
+                {shotProgress.matched != null && (
+                  <> · {shotProgress.matched} matched</>
+                )}
+                {shotProgress.current && (
+                  <div style={{ color: '#94a3b8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {shotProgress.current}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {shotPhase === 'done' && shotResult && (
+              <div style={{
+                padding: '10px 12px', borderRadius: 6,
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                fontSize: 12, color: '#a7f3d0', lineHeight: 1.5,
+                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <strong>✓ Captured</strong> {shotResult.succeeded}/{shotResult.dashboardCount} dashboards
+                  {shotResult.failed > 0 && <span style={{ color: '#fca5a5' }}> · {shotResult.failed} failed</span>}
+                  {' · '}{Math.round((shotResult.zipBytes || 0) / 1024)} KB
+                  {' · '}{Math.round((shotResult.durationMs || 0) / 1000)}s
+                </div>
+                <a
+                  href={shotResult.downloadUrl}
+                  download
+                  style={{
+                    padding: '6px 14px', borderRadius: 6,
+                    background: '#10b981', color: '#052e1a',
+                    fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                  }}
+                >
+                  ⬇ Download zip
+                </a>
+              </div>
+            )}
+
+            {shotPhase === 'error' && shotError && (
+              <div style={{
+                padding: '8px 12px', borderRadius: 6,
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                fontSize: 11, color: '#fca5a5',
+              }}>
+                Capture failed: {shotError}
+              </div>
             )}
           </div>
         </div>
