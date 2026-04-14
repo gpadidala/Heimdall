@@ -1217,19 +1217,65 @@ export default function TestRunnerPage() {
                 }}
               >
                 <option value="">— All plugins (no filter) —</option>
-                {plugins.map((p) => {
-                  const flags = [];
-                  if (p.decommissioned) flags.push('⚠ DECOMMISSIONED');
-                  if (p.angular) flags.push('⚠ ANGULAR');
-                  if (p.signature && p.signature !== 'valid' && p.signature !== 'internal') flags.push(`sig:${p.signature}`);
-                  const flagStr = flags.length ? ` — ${flags.join(' · ')}` : '';
-                  const ver = p.installedVersion && p.installedVersion !== 'unknown' ? p.installedVersion : null;
-                  return (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id}{ver ? ` v${ver}` : ''}{flagStr}
-                    </option>
-                  );
-                })}
+                {(() => {
+                  // Categorise plugins the way grafana.com/grafana/plugins/all-plugins/
+                  // lays them out: Source (External / Core / Embedded) × Type
+                  // (Data source / Panel / App / Renderer). Built with native
+                  // <optgroup> so the dropdown stays lightweight.
+                  const TYPE_LABEL = {
+                    datasource: 'Data source',
+                    panel: 'Panel',
+                    app: 'App',
+                    renderer: 'Renderer',
+                    unknown: 'Other',
+                  };
+                  const TYPE_ORDER = ['datasource', 'panel', 'app', 'renderer', 'unknown'];
+                  const SOURCE_ORDER = [
+                    { key: 'external', label: 'External' },
+                    { key: 'core', label: 'Core (ships with Grafana)' },
+                    { key: 'embedded', label: 'Embedded in app' },
+                  ];
+                  const sourceOf = (p) => (p.embedded ? 'embedded' : (p.core ? 'core' : 'external'));
+
+                  const buckets = {};
+                  for (const p of plugins) {
+                    const src = sourceOf(p);
+                    const type = TYPE_ORDER.includes(p.type) ? p.type : 'unknown';
+                    const key = `${src}::${type}`;
+                    (buckets[key] || (buckets[key] = [])).push(p);
+                  }
+
+                  const groups = [];
+                  for (const src of SOURCE_ORDER) {
+                    for (const type of TYPE_ORDER) {
+                      const list = buckets[`${src.key}::${type}`];
+                      if (!list || !list.length) continue;
+                      list.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+                      groups.push({
+                        label: `${src.label} — ${TYPE_LABEL[type]} (${list.length})`,
+                        plugins: list,
+                      });
+                    }
+                  }
+
+                  return groups.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.plugins.map((p) => {
+                        const flags = [];
+                        if (p.decommissioned) flags.push('⚠ DECOMMISSIONED');
+                        if (p.angular) flags.push('⚠ ANGULAR');
+                        if (p.signature && p.signature !== 'valid' && p.signature !== 'internal') flags.push(`sig:${p.signature}`);
+                        const flagStr = flags.length ? ` — ${flags.join(' · ')}` : '';
+                        const ver = p.installedVersion && p.installedVersion !== 'unknown' ? p.installedVersion : null;
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.name || p.id}{ver ? ` v${ver}` : ''}{flagStr}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ));
+                })()}
               </select>
               {pluginId && (
                 <button
@@ -1252,6 +1298,29 @@ export default function TestRunnerPage() {
                 No plugins found — verify env credentials in Settings.
               </div>
             )}
+            {!pluginLoading && plugins.length > 0 && (() => {
+              const externalCount = plugins.filter((p) => !p.core && !p.embedded).length;
+              const coreCount     = plugins.filter((p) => p.core).length;
+              const embeddedCount = plugins.filter((p) => p.embedded).length;
+              const chip = (label, count, color) => (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '3px 10px', borderRadius: 999,
+                  background: `${color}14`, border: `1px solid ${color}40`,
+                  fontSize: 11, color,
+                }}>
+                  <strong>{count}</strong> {label}
+                </span>
+              );
+              return (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {chip('total', plugins.length, '#94a3b8')}
+                  {externalCount > 0 && chip('external', externalCount, '#22d3ee')}
+                  {coreCount > 0 && chip('core', coreCount, '#a78bfa')}
+                  {embeddedCount > 0 && chip('embedded', embeddedCount, '#f59e0b')}
+                </div>
+              );
+            })()}
 
             {/* Decommission banner — shown at the top when applicable */}
             {pluginId && pluginUpdate?.decommissioned && (
