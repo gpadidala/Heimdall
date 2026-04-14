@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Heimdall — Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1280px;
+    min-height: 1600px;
+    background: #f4f6fb;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: #0f172a;
+    padding: 36px 40px 48px;
+    position: relative;
+  }
+
+  /* ---------- Header ---------- */
+  .header { text-align: center; margin-bottom: 22px; }
+  .header h1 {
+    font-size: 44px; font-weight: 900; letter-spacing: -0.5px;
+    color: #0f172a; line-height: 1.1;
+  }
+  .header h1 .accent { color: #f46800; }
+  .header .subtitle {
+    margin-top: 10px; font-size: 20px; color: #334155; font-weight: 500;
+  }
+  .header .author {
+    margin-top: 6px; font-size: 13px; color: #64748b; letter-spacing: 0.3px;
+  }
+
+  /* ---------- Diagram container ---------- */
+  .diagram {
+    position: relative;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 18px;
+    padding: 22px 26px 26px 90px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+  }
+
+  /* ---------- Layer band ---------- */
+  .layer {
+    position: relative;
+    border-radius: 12px;
+    padding: 18px 20px 20px;
+    margin-bottom: 14px;
+  }
+  .layer:last-child { margin-bottom: 0; }
+  .layer-label {
+    position: absolute;
+    left: -68px; top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    transform-origin: center;
+    font-size: 11px; font-weight: 800; letter-spacing: 2.5px;
+    color: #475569; text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* Layer palettes */
+  .layer-user       { background: #ede9fe; border: 1px solid #c4b5fd; }
+  .layer-api        { background: #e0f2fe; border: 1px solid #7dd3fc; }
+  .layer-engine     { background: #ffedd5; border: 1px solid #fdba74; }
+  .layer-intel      { background: #fce7f3; border: 1px solid #f9a8d4; }
+  .layer-data       { background: #dcfce7; border: 1px solid #86efac; }
+
+  /* ---------- Node grid inside a layer ---------- */
+  .nodes {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    align-items: stretch; justify-content: center;
+  }
+
+  .node {
+    position: relative;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    min-width: 175px;
+    flex: 1 1 175px;
+    box-shadow: 0 3px 8px rgba(15,23,42,0.05);
+    text-align: left;
+  }
+  .node .icon { font-size: 22px; display: block; margin-bottom: 4px; }
+  .node .title { font-size: 15px; font-weight: 800; color: #0f172a; }
+  .node .sub { font-size: 11px; color: #64748b; margin-top: 3px; line-height: 1.35; }
+
+  /* Node accent stripes by layer */
+  .layer-user   .node { border-top: 3px solid #7c3aed; }
+  .layer-api    .node { border-top: 3px solid #0284c7; }
+  .layer-engine .node { border-top: 3px solid #ea580c; }
+  .layer-intel  .node { border-top: 3px solid #db2777; }
+  .layer-data   .node { border-top: 3px solid #16a34a; }
+
+  /* Hero node for orchestrator */
+  .node.hero {
+    background: #fff7ed;
+    border: 2px solid #fb923c;
+    min-width: 220px;
+    flex: 0 0 240px;
+  }
+  .node.hero .title { color: #9a3412; }
+
+  /* Small corner badge */
+  .badge {
+    position: absolute; top: -9px; right: -9px;
+    background: #dc2626; color: #fff;
+    font-size: 10px; font-weight: 800;
+    padding: 3px 7px; border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(220,38,38,0.35);
+    letter-spacing: 0.3px;
+  }
+  .badge.green { background: #16a34a; box-shadow: 0 2px 6px rgba(22,163,74,0.35); }
+  .badge.blue  { background: #0284c7; box-shadow: 0 2px 6px rgba(2,132,199,0.35); }
+  .badge.pink  { background: #db2777; box-shadow: 0 2px 6px rgba(219,39,119,0.35); }
+
+  /* ---------- Arrow rail between layers ---------- */
+  .rail {
+    height: 28px; position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rail .arrow {
+    font-size: 14px; color: #64748b; font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .rail .arrow .t {
+    background: #ffffff; border: 1px dashed #94a3b8;
+    border-radius: 999px; padding: 3px 14px;
+    color: #475569; font-size: 11px;
+  }
+
+  /* ---------- Footer legend ---------- */
+  .legend {
+    margin-top: 24px;
+    display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+    font-size: 12px; color: #475569;
+  }
+  .legend .chip {
+    background: #fff; border: 1px solid #cbd5e1;
+    padding: 6px 12px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .legend .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .dot.user { background: #7c3aed; }
+  .dot.api  { background: #0284c7; }
+  .dot.eng  { background: #ea580c; }
+  .dot.ai   { background: #db2777; }
+  .dot.data { background: #16a34a; }
+
+  .tagline {
+    margin-top: 14px;
+    text-align: center; color: #334155; font-size: 13px;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>THE <span class="accent">HEIMDALL</span> STACK — O11Y ON O11Y</h1>
+    <div class="subtitle">One platform · Three engines · Every layer of your Grafana stack</div>
+    <div class="author">🔱  K6 API · Playwright E2E · JMeter Performance · AI Failure Analysis</div>
+  </div>
+
+  <div class="diagram">
+
+    <!-- ============ USER LAYER ============ -->
+    <div class="layer layer-user">
+      <div class="layer-label">User Layer</div>
+      <div class="nodes">
+        <div class="node">
+          <span class="icon">🖥️</span>
+          <div class="title">React Dashboard</div>
+          <div class="sub">Splash · Run Tests · Reports<br>Dep Graph · Schedules</div>
+          <span class="badge blue">UI</span>
+        </div>
+        <div class="node">
+          <span class="icon">📡</span>
+          <div class="title">Live Progress</div>
+          <div class="sub">WebSocket stream<br>real-time pass/fail</div>
+        </div>
+        <div class="node">
+          <span class="icon">📊</span>
+          <div class="title">HTML Reports</div>
+          <div class="sub">Donut · 7-col table<br>deep-linked panels</div>
+        </div>
+        <div class="node">
+          <span class="icon">⌨️</span>
+          <div class="title">CLI</div>
+          <div class="sub">CI/CD entrypoint<br>GitHub Actions · Jenkins</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rail"><span class="arrow"><span class="t">REST  ·  WebSocket</span></span></div>
+
+    <!-- ============ API LAYER ============ -->
+    <div class="layer layer-api">
+      <div class="layer-label">API Layer</div>
+      <div class="nodes">
+        <div class="node">
+          <span class="icon">⚡</span>
+          <div class="title">Express Server</div>
+          <div class="sub">Node.js 18+<br>REST endpoints</div>
+        </div>
+        <div class="node">
+          <span class="icon">🔌</span>
+          <div class="title">WS Live Recorder</div>
+          <div class="sub">Streams per-test<br>progress to UI</div>
+        </div>
+        <div class="node">
+          <span class="icon">🛡️</span>
+          <div class="title">Middleware</div>
+          <div class="sub">Auth · scope<br>env routing</div>
+        </div>
+        <div class="node">
+          <span class="icon">⏰</span>
+          <div class="title">Cron Scheduler</div>
+          <div class="sub">Recurring runs<br>notify on break</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rail"><span class="arrow"><span class="t">dispatch  ·  orchestrate</span></span></div>
+
+    <!-- ============ ENGINE LAYER ============ -->
+    <div class="layer layer-engine">
+      <div class="layer-label">Engine Layer</div>
+      <div class="nodes">
+        <div class="node hero">
+          <span class="icon">🧩</span>
+          <div class="title">Test Engine Orchestrator</div>
+          <div class="sub">Scope resolver · env switch · plugin filter<br>routes each run to the right runner</div>
+          <span class="badge">CORE</span>
+        </div>
+        <div class="node">
+          <span class="icon">🎯</span>
+          <div class="title">K6 Runner</div>
+          <div class="sub">22 API test<br>categories</div>
+          <span class="badge green">22</span>
+        </div>
+        <div class="node">
+          <span class="icon">🎭</span>
+          <div class="title">Playwright Runner</div>
+          <div class="sub">12 real-browser<br>E2E suites</div>
+          <span class="badge green">12</span>
+        </div>
+        <div class="node">
+          <span class="icon">🔥</span>
+          <div class="title">JMeter Runner</div>
+          <div class="sub">18 performance<br>load plans</div>
+          <span class="badge green">18</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rail"><span class="arrow"><span class="t">results  ·  screenshots  ·  failures</span></span></div>
+
+    <!-- ============ INTELLIGENCE LAYER ============ -->
+    <div class="layer layer-intel">
+      <div class="layer-label">Intelligence Layer</div>
+      <div class="nodes">
+        <div class="node">
+          <span class="icon">🧠</span>
+          <div class="title">LLM Service</div>
+          <div class="sub">Claude · GPT<br>root-cause text</div>
+          <span class="badge pink">AI</span>
+        </div>
+        <div class="node">
+          <span class="icon">✨</span>
+          <div class="title">ADTG</div>
+          <div class="sub">AI Test Generator<br>plain-English → plan</div>
+          <span class="badge pink">AI</span>
+        </div>
+        <div class="node">
+          <span class="icon">🔎</span>
+          <div class="title">Plugin Check</div>
+          <div class="sub">Installed vs latest<br>Angular · signature</div>
+        </div>
+        <div class="node">
+          <span class="icon">📸</span>
+          <div class="title">Snapshot AI</div>
+          <div class="sub">Pink-panel detect<br>visual regression</div>
+        </div>
+        <div class="node">
+          <span class="icon">🗺️</span>
+          <div class="title">Dependency Graph</div>
+          <div class="sub">Blast-radius<br>"47 dashboards"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rail"><span class="arrow"><span class="t">queries  ·  fetch  ·  persist</span></span></div>
+
+    <!-- ============ DATA LAYER ============ -->
+    <div class="layer layer-data">
+      <div class="layer-label">Data Layer</div>
+      <div class="nodes">
+        <div class="node">
+          <span class="icon">🔭</span>
+          <div class="title">Grafana API Client</div>
+          <div class="sub">Dashboards · DS<br>alerts · plugins</div>
+          <span class="badge">9.x–12.x</span>
+        </div>
+        <div class="node">
+          <span class="icon">🗄️</span>
+          <div class="title">SQLite Results</div>
+          <div class="sub">Runs · reports<br>history · trends</div>
+        </div>
+        <div class="node">
+          <span class="icon">🖼️</span>
+          <div class="title">Screenshot Store</div>
+          <div class="sub">gzipped PNGs<br>inline in HTML</div>
+        </div>
+        <div class="node">
+          <span class="icon">📧</span>
+          <div class="title">SMTP Notifier</div>
+          <div class="sub">createdBy/updatedBy<br>CC default</div>
+        </div>
+        <div class="node">
+          <span class="icon">🌐</span>
+          <div class="title">grafana.com</div>
+          <div class="sub">Plugin registry<br>latest versions</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <span class="chip"><span class="dot user"></span> User / UI</span>
+    <span class="chip"><span class="dot api"></span> API / Server</span>
+    <span class="chip"><span class="dot eng"></span> Test Engines</span>
+    <span class="chip"><span class="dot ai"></span> Intelligence</span>
+    <span class="chip"><span class="dot data"></span> Data / External</span>
+  </div>
+
+  <div class="tagline">Stop being O11y for everyone else. Start being O11y for yourself.</div>
+
+</body>
+</html>

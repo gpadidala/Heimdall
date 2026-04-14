@@ -199,31 +199,23 @@ Bash scripts are easy to start, impossible to maintain, and silently rot. Heimda
 
 ## 🏛️ Architecture
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                         Heimdall v2                           │
-└───────────────────────────────────────────────────────────────────┘
+<p align="center">
+  <img src="docs/assets/architecture/heimdall-architecture.png" alt="Heimdall Architecture — five layers: User, API, Engine, Intelligence, Data" width="100%">
+</p>
 
-    ┌──────────────┐      WebSocket + REST      ┌──────────────┐
-    │   React UI   │ ◄────────────────────────► │   Express    │
-    │    :3001     │                            │    :4000     │
-    └──────────────┘                            └──────┬───────┘
-                                                       │
-                         ┌─────────────────────────────┼─────────────────────────┐
-                         ▼                             ▼                         ▼
-                 ┌───────────────┐             ┌──────────────┐          ┌──────────────┐
-                 │  Test Engine  │             │    SQLite    │          │ AI Analysis  │
-                 │  17 categories│             │  (sql.js)    │          │ OpenAI/Claude│
-                 └───────┬───────┘             └──────────────┘          └──────────────┘
-                         │
-                         ▼
-                 ┌───────────────┐
-                 │  Grafana API  │
-                 │  9.x  –  12.x │
-                 └───────────────┘
-```
+Heimdall is organised as **five horizontal layers**, each with a single responsibility:
 
-The React UI talks to the Express API over REST for commands and over WebSocket for live progress. Every test run persists to SQLite for history and regression comparison; the Test Engine runs 17 category modules against the Grafana HTTP API and streams results back to the UI as they arrive.
+| Layer | Components | Purpose |
+|---|---|---|
+| 🟣 **User** | React Dashboard · Live Progress (WS) · HTML Reports · CLI | Everything a human or CI pipeline touches |
+| 🔵 **API** | Express Server · WS Live Recorder · Middleware · Cron Scheduler | REST + WebSocket surface; auth, scope, recurring runs |
+| 🟠 **Engine** | **Test Engine Orchestrator** · K6 Runner (22 cat) · Playwright Runner (12 suites) · JMeter Runner (18 plans) | The three-engine heart — one orchestrator routes each run to the right runner |
+| 🩷 **Intelligence** | LLM Service (Claude/GPT) · ADTG (AI Test Generator) · Plugin Check · Snapshot AI · Dependency Graph | AI failure analysis, plain-English test generation, blast-radius detection |
+| 🟢 **Data** | Grafana API Client · SQLite Results · Screenshot Store · SMTP Notifier · grafana.com Registry | Where state lives and where Heimdall reaches outside itself |
+
+The React UI talks to the Express API over REST for commands and over WebSocket for live progress. The **Test Engine Orchestrator** resolves scope (environment, datasource, plugin filter) and dispatches to K6, Playwright, and JMeter runners. Every run persists to SQLite for history and regression comparison; failing tests are routed through the Intelligence layer for root-cause analysis and blast-radius explanation before the HTML report is rendered.
+
+> Source: [`docs/assets/architecture/heimdall-architecture.html`](docs/assets/architecture/heimdall-architecture.html) — edit the HTML and re-render the PNG if you change the diagram.
 
 ---
 
