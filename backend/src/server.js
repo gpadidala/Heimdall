@@ -93,12 +93,14 @@ app.get('/api/plugins/installed', async (req, res) => {
     const url = (grafanaUrl && String(grafanaUrl).trim()) || config.grafana.url;
     const tok = (token && String(token).trim()) || config.grafana.token;
     const client = new GrafanaClient(url, tok);
-    // Default to showing everything — what an operator expects when they
-    // open the Plugins page in prod. Pass includeCore=0 / includeEmbedded=0
-    // to narrow down from the UI.
+    // Default: external plugins only — i.e. the ones the operator actually
+    // installed on top of Grafana. Core plugins ship with the Grafana
+    // binary and upgrade with it, so they're not "installed" in the
+    // operator sense. Opt in with ?includeCore=1 / ?includeEmbedded=1.
+    const optIn = (v) => v === '1' || v === 'true';
     const list = await pluginCheck.listInstalledPlugins(client, {
-      includeCore: includeCore !== '0' && includeCore !== 'false',
-      includeEmbedded: includeEmbedded !== '0' && includeEmbedded !== 'false',
+      includeCore: optIn(includeCore),
+      includeEmbedded: optIn(includeEmbedded),
     });
     res.json(list);
   } catch (err) {

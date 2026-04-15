@@ -92,7 +92,14 @@ function flattenPanels(panels) {
  * angular/deprecation flags from local heuristics. Does NOT call out
  * to grafana.com — call getUpdateInfo() per plugin for that.
  */
-async function listInstalledPlugins(client, { includeCore = true, includeEmbedded = true } = {}) {
+// Defaults to external-only — i.e. only plugins the operator actually
+// installed on top of Grafana. Core plugins ship with Grafana itself and
+// upgrade with the Grafana binary, so they're not "installed" in the
+// operator sense and they clutter the Plugins page. Pass { includeCore: true }
+// to get them back; same for embedded plugins (those bundled inside an
+// app plugin — still technically installed, but usually not what the user
+// is asking about).
+async function listInstalledPlugins(client, { includeCore = false, includeEmbedded = false } = {}) {
   const r = await client.getPlugins();
   if (!r.ok) throw new Error(`getPlugins failed: ${r.error || 'unknown'}`);
 
